@@ -1,0 +1,120 @@
+Step 1: Shut down the VM
+Before you can extend your guest machine Virtual disk, you need to first shut it down.
+
+$ sudo virsh list
+ Id   Name    State
+-----------------------
+ 4    rhel8   running
+If your guest machine is in running state, power it off using its ID or Name.
+
+$ sudo virsh shutdown rhel8
+Domain rhel8 is being shutdown
+Confirm that it is truly down before proceeding to manage its disks.
+
+$  sudo virsh list          
+ Id   Name   State
+--------------------
+Step 2: Extend guest OS disk
+Locate your guest OS disk path.
+
+$ sudo virsh domblklist rhel8
+ Target   Source
+-----------------------------------------------
+ vda      /var/lib/libvirt/images/rhel8.qcow2
+ sda      -
+
+OR use:
+
+$ sudo virsh dumpxml rhel8 | egrep 'disk type' -A 5
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='/var/lib/libvirt/images/rhel8.qcow2'/>
+      <backingStore/>
+      <target dev='vda' bus='virtio'/>
+      <address type='pci' domain='0x0000' bus='0x04' slot='0x00' function='0x0'/>
+--
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+      <target dev='sda' bus='sata'/>
+      <readonly/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+You can obtain the same information from the Virtual Machine Manager GUI. My VM disk is located in ‘/var/lib/libvirt/images/rhel8.qcow2‘.
+
+$ sudo qemu-img info /var/lib/libvirt/images/rhel8.qcow2
+image: /var/lib/libvirt/images/rhel8.qcow2
+file format: qcow2
+virtual size: 30G (42949672960 bytes)
+disk size: 2.0G
+cluster_size: 65536
+Format specific information:
+    compat: 1.1
+    lazy refcounts: true
+    refcount bits: 16
+    corrupt: false
+Step 3: Extend guest VM disk
+Since we know the location of our Virtual Machine disk, let’s extend it to our desired capacity.
+
+sudo qemu-img resize /var/lib/libvirt/images/rhel8.qcow2 +10G
+Please note that qemu-img can’t resize an image which has snapshots. You will need to first remove all VM snapshots. See this example:
+
+$ sudo virsh snapshot-list rhel8
+ Name        Creation Time               State
+--------------------------------------------------
+ snapshot1   2019-04-16 08:54:24 +0300   shutoff
+
+$ sudo virsh snapshot-delete --domain rhel8 --snapshotname snapshot1
+Domain snapshot snapshot1 deleted
+
+$ sudo virsh snapshot-list rhel8                                    
+ Name   Creation Time   State
+-------------------------------
+Then extend the disk by using the `+‘ before disk capacity.
+
+$ sudo qemu-img resize /var/lib/libvirt/images/rhel8.qcow2 +10G
+Image resized.
+You can also resize with virsh command. This requires domain to be running.
+
+$ sudo qemu-img info /var/lib/libvirt/images/rhel8.qcow2
+ image: /var/lib/libvirt/images/rhel8.qcow2
+ file format: qcow2
+ virtual size: 30G (42949672960 bytes)
+ disk size: 2.0G
+ cluster_size: 65536
+ Format specific information:
+     compat: 1.1
+     lazy refcounts: true
+     refcount bits: 16
+     corrupt: false
+
+$ sudo virsh start rhel8
+$ sudo virsh blockresize rhel8 /var/lib/libvirt/images/rhel8.qcow2 40G
+Block device '/var/lib/libvirt/images/rhel8.qcow2' is resized
+Confirm disk size with fdisk command.
+
+$ sudo fdisk -l /var/lib/libvirt/images/rhel8.qcow2      
+Disk /var/lib/libvirt/images/rhel8.qcow2: 30.2 GiB, 32399818752 bytes, 63280896 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Step 4: Grow VM partition
+Now power up the VM
+
+$ sudo virsh start rhel8
+Domain rhel8 started
+SSH to your VM as root user or using user account that has sudo.
+
+$ ssh rhel8             
+Last login: Fri Apr 19 06:11:19 2019 from 192.168.122.1
+[jmutai@rhel8 ~]$ 
+Check your new disk layout.
+
+$ lsblk 
+ NAME          MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+ sr0            11:0    1 1024M  0 rom  
+ vda           252:0    0   40G  0 disk 
+ ├─vda1        252:1    0    1G  0 part /boot
+ └─vda2        252:2    0   29G  0 part 
+   ├─rhel-root 253:0    0 26.9G  0 lvm  /
+   └─rhel-swap 253:1    0  2.1G  0 lvm  [SWAP]
+My VM total disk capacity is now 40GB, previously it was 30GB. To extend your OS partition, refer to below guides.
