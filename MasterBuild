@@ -1,0 +1,13 @@
+apt-get update
+apt install xauth
+
+#open /etc/ssh/sshd_config look for the X11Forwarding option. This line should be uncommented and be changed to X11Forwarding yes
+
+systemctl restart sshd
+
+apt install xfce4 xfce4-goodies gnome-icon-theme
+
+apt-get install tightvncserver 
+vncserver :1 -geometry 1024x768 -depth 24
+
+apt-get install virt-manager
