@@ -1,0 +1,16 @@
+Extending physical volumes
+cfdisk
+partprobe /dev/sda
+pvresize /dev/sda3
+lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
+
+
+
+
+Expanding LVM on dynamically expanding disks
+For dynamically expanding disks (at least on Hyper-V) I have found this script works well:
+
+growpart /dev/sda 3
+lvextend -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
